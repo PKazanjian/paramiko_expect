@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+''' Use SSH to execute various commands '''
+
+import re
+import json
+from paramiko import SSHClient, AutoAddPolicy
+
+
+def session_ssh(host, g_vars):
+    ''' SSH client '''
+
+    ssh = SSHClient()
+
+    ssh.set_missing_host_key_policy(AutoAddPolicy)
+
+    ssh.connect(
+        hostname=f'{host}.local',
+        username=g_vars['creds'][0],
+        password=g_vars['creds'][1],
+        timeout=5
+        )
+
+    session = ssh.invoke_shell()
+
+    def expect():
+        ''' Detect prompt and return stdout '''
+
+        buff = b''
+
+        while not buff.endswith(host.encode('ascii') + b'(s1)#'):
+
+            resp = session.recv(65000)
+
+            buff += resp
+
+        return buff.decode('utf-8')
+
+    expect()
+
+    for cmd in g_vars['cmds']:
+
+        session.send(f'{cmd}\n')
+
+        stdout = expect()
+
+    clean = re.sub(r'^.*\n', '', stdout, count=1)
+
+    ssh.close()
+
+    return json.loads(re.sub(rf'{host}.*$', '', clean))
